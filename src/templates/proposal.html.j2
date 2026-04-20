@@ -1,0 +1,253 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    @page {
+      size: A4;
+      margin: 26mm 12mm 25mm 12mm;
+    }
+
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      color: #111111;
+      line-height: 1.55;
+      font-size: 13px;
+      background: #ffffff;
+      margin: 0;
+      counter-reset: pageIndex;
+    }
+
+    .global-header {
+      position: fixed;
+      top: -14mm;
+      left: 12mm;
+      right: 12mm;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 1px solid #111111;
+      padding-bottom: 2.2mm;
+      font-size: 10.5px;
+      color: #111111;
+      z-index: 999;
+    }
+
+    .global-header-left {
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      line-height: 1.2;
+      max-width: 72%;
+    }
+
+    .global-header-right {
+      font-style: italic;
+      line-height: 1.2;
+      text-align: right;
+      max-width: 28%;
+    }
+
+    .global-footer {
+      position: fixed;
+      bottom: 2mm;
+      left: 12mm;
+      right: 12mm;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid #111111;
+      padding-top: 2.2mm;
+      font-size: 10px;
+      color: #111111;
+    }
+
+    .global-footer-page::after {
+      counter-increment: pageIndex;
+      content: "Page " counter(pageIndex);
+      font-weight: 700;
+      letter-spacing: 0.06em;
+    }
+
+    .proposal-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0 18px 0;
+      table-layout: fixed;
+    }
+
+    .proposal-table th,
+    .proposal-table td {
+      border: 1px solid #d1d1d1;
+      padding: 10px 12px;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    .proposal-table th {
+      background: #000000;
+      color: #ffffff;
+      font-weight: 700;
+    }
+
+    .proposal-table .col-phase {
+      width: 18%;
+    }
+
+    .proposal-table .col-activities {
+      width: 67%;
+    }
+
+    .proposal-table .col-duration {
+      width: 15%;
+      text-align: center;
+    }
+
+    .page-content {
+      margin: 12mm 12mm 12mm 12mm;
+      padding-bottom: 10mm;
+    }
+
+    .cover {
+      page-break-after: always;
+      min-height: 96vh;
+      position: relative;
+      padding: 14mm 8mm 8mm 8mm;
+      box-sizing: border-box;
+      background: #ffffff;
+    }
+
+    .hero {
+      margin-top: 12mm;
+      text-align: center;
+    }
+
+    .logo-wrap {
+      width: 160px;
+      height: 160px;
+      margin: 0 auto 18px auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000000;
+      overflow: hidden;
+    }
+
+    .logo {
+      max-width: 140px;
+      max-height: 140px;
+      object-fit: contain;
+      display: block;
+    }
+
+    .agency-title {
+      margin: 0;
+      font-size: 30px;
+      font-weight: 700;
+      letter-spacing: 0.48em;
+      text-indent: 0.48em;
+      text-transform: uppercase;
+      color: #111111;
+    }
+
+    .agency-subtitle {
+      margin-top: 6px;
+      font-size: 13.5px;
+      letter-spacing: 0.62em;
+      text-indent: 0.62em;
+      text-transform: uppercase;
+      color: #111111;
+    }
+
+    .divider {
+      width: 100%;
+      border-top: 2px solid #111111;
+      margin: 20mm 0 0 0;
+    }
+
+    .proposal-title {
+      margin-top: 11mm;
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: 0.24em;
+      text-indent: 0.24em;
+      text-transform: uppercase;
+      line-height: 1.55;
+      color: #111111;
+    }
+
+    .meta-box {
+      width: 260px;
+      margin: 15mm auto 0 auto;
+      border: 1px solid #cfcfcf;
+      border-top: 0;
+      padding: 12px 16px 8px 16px;
+      text-align: center;
+      font-size: 12.5px;
+      line-height: 1.45;
+      color: #111111;
+    }
+
+    .meta-box em {
+      font-style: italic;
+    }
+
+    h3 {
+      color: #111111;
+      margin-top: 18px;
+      border-left: 4px solid #111111;
+      padding-left: 10px;
+      font-size: 17px;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    ul {
+      margin: 6px 0 10px 18px;
+    }
+  </style>
+</head>
+<body>
+  <div class="global-header" aria-hidden="true">
+    <div class="global-header-left">{{ agency_name }} Consultancy Services</div>
+    <div class="global-header-right">{{ proposal_title_header }}</div>
+  </div>
+
+  <div class="global-footer" aria-hidden="true">
+    <div>Confidential | {{ agency_name }} </div>
+    <div class="global-footer-page"></div>
+  </div>
+
+  <div class="page-content">
+    <div class="cover">
+      <div class="hero">
+        {% if logo_path %}
+          <div class="logo-wrap">
+            <img class="logo" src="{{ logo_path }}" alt="Agency Logo" />
+          </div>
+        {% endif %}
+
+        <div class="agency-title">{{ agency_name }}</div>
+        <div class="agency-subtitle">Consultancy Services</div>
+
+        <div class="divider"></div>
+
+        <div class="proposal-title">{{ proposal_title_display | safe }}</div>
+
+        <div class="meta-box">
+          <div>Prepared for {{ client_business_name }}</div>
+          <div>Prepared by {{ agency_name }} Consultancy Services</div>
+          <div>Date: {{ current_date }}</div>
+          <div><em>Version: 1.0</em></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      {{ body_html | safe }}
+    </div>
+  </div>
+</body>
+</html>
