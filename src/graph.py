@@ -177,7 +177,10 @@ def _generate_dynamic_section(
     timeline_days: int,
     budget_inr: str,
     research_text: str,
+    max_words: int = None,
 ) -> str:
+    word_limit_text = f"IMPORTANT: Keep content to maximum {max_words} words total." if max_words else ""
+    
     prompt = f"""
 Generate content for section {section_number}. {section_title}.
 Return STRICT JSON only in this shape:
@@ -191,6 +194,7 @@ Rules:
 - Do not include HTML.
 - Keep 1-2 paragraphs and 3-6 bullet points max.
 - Pricing section must mention INR values.
+{word_limit_text}
 
 Context:
 - Agency: {agency_name}
@@ -272,6 +276,7 @@ def draft_node(state: ProposalState) -> ProposalState:
         timeline_days=data["timeline_days"],
         budget_inr=state["computed_budget_inr"],
         research_text=research_text,
+        max_words=data.get("project_objective_max_words"),
     )
     dynamic_3 = _generate_dynamic_section(
         client=client,
@@ -284,6 +289,7 @@ def draft_node(state: ProposalState) -> ProposalState:
         timeline_days=data["timeline_days"],
         budget_inr=state["computed_budget_inr"],
         research_text=research_text,
+        max_words=data.get("scope_of_work_max_words"),
     )
     dynamic_4 = _generate_dynamic_section(
         client=client,
@@ -296,6 +302,7 @@ def draft_node(state: ProposalState) -> ProposalState:
         timeline_days=data["timeline_days"],
         budget_inr=state["computed_budget_inr"],
         research_text=research_text,
+        max_words=data.get("technology_stack_max_words"),
     )
     dynamic_5 = _build_timeline_html(data["timeline_days"])
     dynamic_6 = _build_pricing_html(
@@ -314,6 +321,7 @@ def draft_node(state: ProposalState) -> ProposalState:
         timeline_days=data["timeline_days"],
         budget_inr=state["computed_budget_inr"],
         research_text=research_text,
+        max_words=data.get("additional_notes_max_words"),
     )
 
     state["section_text"] = "\n\n".join(

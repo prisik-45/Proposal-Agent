@@ -8,6 +8,11 @@ class ProposalInput(TypedDict, total=False):
     price_min: str
     price_max: str
     includes_text: str
+    # Optional word limits for sections
+    scope_of_work_max_words: int
+    project_objective_max_words: int
+    technology_stack_max_words: int
+    additional_notes_max_words: int
 
 
 class ProposalState(TypedDict, total=False):
