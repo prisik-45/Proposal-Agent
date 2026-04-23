@@ -50,7 +50,7 @@
 
     .global-footer {
       position: fixed;
-      bottom: 2mm;
+      bottom: -4mm;
       left: 12mm;
       right: 12mm;
       display: flex;
@@ -67,7 +67,7 @@
       content: "Page " counter(pageIndex);
       font-weight: 700;
       letter-spacing: 0.06em;
-    }
+  }
 
     .proposal-table {
       width: 100%;
@@ -207,6 +207,125 @@
     ul {
       margin: 6px 0 10px 18px;
     }
+
+    .acknowledgement-section {
+      page-break-before: always;
+      margin-top: 40mm;
+      text-align: center;
+    }
+
+    .acknowledgement-table {
+      width: 500px;
+      margin: 0 auto 40mm auto;
+      border-collapse: collapse;
+      border: 1px solid #111111;
+    }
+
+    .acknowledgement-table td {
+      border: 1px solid #111111;
+      padding: 18px 20px;
+      text-align: left;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .acknowledgement-table .header-cell {
+      font-weight: 700;
+      background: #ffffff;
+      width: 50%;
+    }
+
+    .acknowledgement-table .content-cell {
+      color: #999999;
+      font-style: italic;
+    }
+
+    .acknowledgement-table .agency-name {
+      font-weight: 700;
+      color: #111111;
+      font-style: normal;
+    }
+
+    .acknowledgement-table .client-cell {
+      height: 80px;
+      vertical-align: bottom;
+      padding-top: 12px;
+      border-bottom: 1px solid #111111;
+    }
+
+    .final-logo-wrap {
+      width: 120px;
+      height: 120px;
+      margin: 0 auto 12mm auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000000;
+      overflow: hidden;
+    }
+
+    .final-logo {
+      max-width: 100px;
+      max-height: 100px;
+      object-fit: contain;
+      display: block;
+    }
+
+    .final-branding {
+      text-align: center;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-indent: 0.18em;
+      text-transform: uppercase;
+      color: #111111;
+    }
+
+    .pricing-container {
+      border: 1px solid #333;
+      padding: 18px;
+      margin: 10px 0;
+      text-align: center;
+      background: #fafafa;
+    }
+
+    .pricing-title {
+      text-align: center;
+      font-size: 18px;
+      letter-spacing: 2px;
+      margin-bottom: 20px;
+    }
+
+    .pricing-amount {
+      font-size: 32px;
+      font-weight: bold;
+      margin: 15px 0;
+      color: #000;
+    }
+
+    .pricing-includes {
+      font-size: 14px;
+      margin: 15px 0;
+      color: #555;
+    }
+
+    .pricing-note {
+      font-style: italic;
+      margin: 20px 0;
+      font-weight: 500;
+      font-size: 13px;
+    }
+
+    .value-assurance {
+      border-left: 8px solid #000;
+      padding: 15px 20px;
+      margin: 20px 0;
+      background-color: #f0f0f0;
+    }
+
+    .value-assurance p {
+      margin: 0;
+    }
   </style>
 </head>
 <body>
@@ -247,6 +366,26 @@
 
     <div>
       {{ body_html | safe }}
+    </div>
+
+    <div class="acknowledgement-section">
+      <table class="acknowledgement-table">
+        <tr>
+          <td class="header-cell">Prepared by</td>
+          <td class="header-cell">Client Acknowledgement</td>
+        </tr>
+        <tr>
+          <td class="content-cell"><span class="agency-name">{{ agency_name }} Consultancy Services</span></td>
+          <td class="content-cell client-cell">Name / Signature / Date</td>
+        </tr>
+      </table>
+
+      {% if logo_path %}
+        <div class="final-logo-wrap">
+          <img class="final-logo" src="{{ logo_path }}" alt="Agency Logo" />
+        </div>
+      {% endif %}
+      <div class="final-branding">{{ agency_name }} Consultancy Services</div>
     </div>
   </div>
 </body>

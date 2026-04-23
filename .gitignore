@@ -34,3 +34,4 @@ output/
 # Test and local debug scripts
 test_*.py
 preview_pdf.py
+final_logo.png

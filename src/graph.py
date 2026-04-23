@@ -100,9 +100,9 @@ FIXED_DESIGN_QUALITY_HTML = """
 FIXED_DEMO_WORK_HTML = """
 <h3>9. Demo Work</h3>
 <p>We have developed demo projects showcasing our design and development capabilities. The demos below reflect our approach to clean UI, smooth experience, and premium feel.</p>
-<p>AI Automation Demo: <a href="https://the-royal-palace-mauve.vercel.app/">https://the-royal-palace-mauve.vercel.app/</a><br/>
-Web Development Demo: <a href="https://the-royal-palace-mauve.vercel.app/">https://the-royal-palace-mauve.vercel.app/</a><br/>
-Social Media Management Demo: <a href="https://the-royal-palace-mauve.vercel.app/">https://the-royal-palace-mauve.vercel.app/</a></p>
+<p><strong>Portfolio:</strong> <a href="https://www.takshy.com/">https://www.takshy.com/</a></p>
+<p><strong>Demo Project 1:</strong> <a href="https://the-royal-palace-mauve.vercel.app/">https://the-royal-palace-mauve.vercel.app/</a></p>
+<p><strong>Demo Project 2:</strong> <a href="https://zeore-new.vercel.app/">https://zeore-new.vercel.app/</a></p>
 """.strip()
 
 
@@ -124,6 +124,7 @@ FIXED_NEXT_STEPS_HTML = """
     <li>Confirm the scope and finalize the feature list</li>
     <li>Initial token payment (10%) to officially kick off the project</li>
     <li>Project kickoff meeting to align on design direction, timelines, and milestones</li>
+    <li>Kindly provide product details, business information, and required content so we can initiate the design and development process smoothly.</li>
 </ul>
 """.strip()
 
@@ -140,6 +141,29 @@ def _render_structured_html(section_data: dict) -> str:
         parts.append(f"<ul>{bullet_items}</ul>")
 
     return "\n".join(parts).strip() or "<p></p>"
+
+
+def _build_pricing_html(price_min: str, price_max: str, includes_text: str) -> str:
+    """
+    Generate pricing section with user-provided pricing information.
+    Price must be provided explicitly by the user when generating proposals.
+    Styling is defined in proposal.html.j2 template.
+    """
+    html = f"""
+<div class="pricing-container">
+    <h4 class="pricing-title">TOTAL PROJECT COST</h4>
+    <p class="pricing-amount">₹{price_min} — ₹{price_max}</p>
+    <p class="pricing-includes">Includes {includes_text}</p>
+</div>
+
+<p class="pricing-note"><strong>Note:</strong> The final cost may vary depending on additional features, integrations (cart systems, advanced animations, admin panels), or custom requirements beyond the initial scope.</p>
+
+<div class="value-assurance">
+    <p><strong>Value Assurance:</strong> If we are unable to deliver the promised quality and experience, a full refund will be provided.</p>
+</div>
+""".strip()
+    
+    return html
 
 
 def _generate_dynamic_section(
@@ -274,17 +298,10 @@ def draft_node(state: ProposalState) -> ProposalState:
         research_text=research_text,
     )
     dynamic_5 = _build_timeline_html(data["timeline_days"])
-    dynamic_6 = _generate_dynamic_section(
-        client=client,
-        section_number=6,
-        section_title="Pricing",
-        agency_name=AGENCY_NAME,
-        agency_services=AGENCY_SERVICES,
-        client_business=data["client_business_name"],
-        client_requirements=data["client_requirements"],
-        timeline_days=data["timeline_days"],
-        budget_inr=state["computed_budget_inr"],
-        research_text=research_text,
+    dynamic_6 = _build_pricing_html(
+        price_min=data.get("price_min", "25,000"),
+        price_max=data.get("price_max", "40,000"),
+        includes_text=data.get("includes_text", "Full development • Domain setup • Basic SEO • 3 months maintenance"),
     )
     dynamic_11 = _generate_dynamic_section(
         client=client,

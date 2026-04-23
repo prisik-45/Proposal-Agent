@@ -1,10 +1,13 @@
 from typing import List, Optional, TypedDict
 
 
-class ProposalInput(TypedDict):
+class ProposalInput(TypedDict, total=False):
     client_business_name: str
     client_requirements: str
     timeline_days: int
+    price_min: str
+    price_max: str
+    includes_text: str
 
 
 class ProposalState(TypedDict, total=False):
