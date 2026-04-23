@@ -1,0 +1,1 @@
+To run : uv run python preview_pdf.py  --client-business-name "prisik" --client-requirements "Build website for gym proteint business"  --timeline-days 60  --price-min "20,000"  --price-max "23,000"  --includes-text "Full development • Domain setup • Basic SEO • 12  months maintenance"
