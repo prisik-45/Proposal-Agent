@@ -9,6 +9,8 @@ interface ParametersDisplayProps {
 const ParametersDisplay: React.FC<ParametersDisplayProps> = ({ params, result }) => {
   if (!params && !result) return null
 
+  const pdfUrl = result?.drive_link || result?.pdf_data_url || null
+
   return (
     <div className="p-4 space-y-4">
       {/* Header */}
@@ -108,14 +110,14 @@ const ParametersDisplay: React.FC<ParametersDisplayProps> = ({ params, result })
           )}
 
 
-          {result.success && result.drive_link && (
+          {result.success && pdfUrl && (
             <a
-              href={result.drive_link}
+              href={pdfUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-block mt-3 bg-gray-700 hover:bg-gray-600 text-white text-xs py-2 px-3 rounded transition-colors"
             >
-              Download PDF from Drive
+              View PDF
             </a>
           )}
 

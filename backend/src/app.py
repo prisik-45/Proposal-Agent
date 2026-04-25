@@ -39,6 +39,7 @@ class ProposalResponse(BaseModel):
     success: bool
     message: str
     drive_link: Optional[str] = None
+    pdf_data_url: Optional[str] = None
     extracted_params: Optional[dict] = None
     error: Optional[str] = None
 
@@ -68,6 +69,7 @@ class ProposalConversationResponse(BaseModel):
     changed_fields: Optional[List[str]] = None
     resolved_params: Optional[Dict[str, Any]] = None
     drive_link: Optional[str] = None
+    pdf_data_url: Optional[str] = None
     updated_sections: Optional[Dict[str, str]] = None
     full_proposal_md: Optional[str] = None
     retrieved_context: Optional[Dict[str, Any]] = None
@@ -248,12 +250,15 @@ def _build_full_proposal_md(params: Dict[str, Any]) -> str:
     ])
 
 
-def _generate_proposal_drive_link(extracted: Dict[str, Any]) -> str:
+def _generate_proposal_artifacts(extracted: Dict[str, Any]) -> Dict[str, str]:
     graph = build_graph()
     result = graph.invoke({
         "input": extracted
     })
-    return result.get("drive_public_link", "")
+    return {
+        "drive_link": result.get("drive_public_link", ""),
+        "pdf_data_url": result.get("pdf_data_url", ""),
+    }
 
 
 def _is_new_proposal_request(user_input: str) -> bool:
@@ -341,8 +346,10 @@ async def converse_proposal(request: ProposalConversationRequest) -> Dict[str, A
                 }
 
             extracted = format_extracted_params(extracted)
-            drive_link = _generate_proposal_drive_link(extracted)
-            session.current_params = {**extracted, "drive_link": drive_link}
+            artifacts = _generate_proposal_artifacts(extracted)
+            drive_link = artifacts["drive_link"]
+            pdf_data_url = artifacts["pdf_data_url"]
+            session.current_params = {**extracted, "drive_link": drive_link, "pdf_data_url": pdf_data_url}
             memory_store.add_turn(
                 session_id,
                 "user",
@@ -381,6 +388,7 @@ async def converse_proposal(request: ProposalConversationRequest) -> Dict[str, A
                 ],
                 "resolved_params": session.current_params,
                 "drive_link": drive_link,
+                "pdf_data_url": pdf_data_url,
                 "updated_sections": {
                     "project_objective": _build_project_objective_section(session.current_params),
                     "scope_of_work": _build_scope_section(session.current_params),
@@ -419,8 +427,10 @@ async def converse_proposal(request: ProposalConversationRequest) -> Dict[str, A
                     "current_params": session.current_params,
                 },
             }
-        drive_link = _generate_proposal_drive_link(resolved)
-        resolved = {**resolved, "drive_link": drive_link}
+        artifacts = _generate_proposal_artifacts(resolved)
+        drive_link = artifacts["drive_link"]
+        pdf_data_url = artifacts["pdf_data_url"]
+        resolved = {**resolved, "drive_link": drive_link, "pdf_data_url": pdf_data_url}
 
         changed_fields = _interpret_update_changes(session.current_params, resolved)
         if not changed_fields:
@@ -476,6 +486,7 @@ async def converse_proposal(request: ProposalConversationRequest) -> Dict[str, A
             "changed_fields": changed_fields,
             "resolved_params": resolved,
             "drive_link": drive_link,
+                "pdf_data_url": pdf_data_url,
             "updated_sections": updated_sections,
             "full_proposal_md": full_md,
             "retrieved_context": {
@@ -536,11 +547,13 @@ async def generate_proposal(request: ProposalRequest):
         
         # Extract results
         drive_link = result.get("drive_public_link", "")
+        pdf_data_url = result.get("pdf_data_url", "")
         
         return ProposalResponse(
             success=True,
             message="Proposal generated successfully!",
             drive_link=drive_link,
+            pdf_data_url=pdf_data_url,
             extracted_params=extracted,
             error=None
         )
@@ -550,6 +563,7 @@ async def generate_proposal(request: ProposalRequest):
             success=False,
             message="Failed to generate proposal",
             drive_link=None,
+            pdf_data_url=None,
             extracted_params=extracted if 'extracted' in locals() else None,
             error=he.detail
         )
@@ -560,6 +574,7 @@ async def generate_proposal(request: ProposalRequest):
             success=False,
             message="Failed to generate proposal",
             drive_link=None,
+            pdf_data_url=None,
             extracted_params=extracted if 'extracted' in locals() else None,
             error=f"{str(e)}\n{error_trace}"
         )

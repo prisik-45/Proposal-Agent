@@ -1,3 +1,4 @@
+import base64
 import json
 from html import escape, unescape
 from pathlib import Path
@@ -485,6 +486,11 @@ def pdf_node(state: ProposalState) -> ProposalState:
         output_file=Path(output_path),
     )
     state["output_pdf_path"] = path
+    try:
+        pdf_bytes = Path(path).read_bytes()
+        state["pdf_data_url"] = "data:application/pdf;base64," + base64.b64encode(pdf_bytes).decode("utf-8")
+    except Exception:
+        state["pdf_data_url"] = ""
     return state
 
 
