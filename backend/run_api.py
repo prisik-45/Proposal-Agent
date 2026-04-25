@@ -14,7 +14,7 @@ if __name__ == "__main__":
     
     # Run on 0.0.0.0 to accept external connections (necessary for Render/Docker)
     uvicorn.run(
-        "src.api:app",
+        "src.app:app",
         host="0.0.0.0",
         port=port,
         reload=False,

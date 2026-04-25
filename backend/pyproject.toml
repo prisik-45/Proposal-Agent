@@ -20,4 +20,4 @@ dependencies = [
 ]
 
 [project.scripts]
-app = "src.api:app"
+app = "src.app:app"
