@@ -58,9 +58,9 @@ const ChatInterface: React.FC = () => {
     setLoading(true)
 
     try {
-      // The baseURL is configured in main.tsx. 
-      // We directly target the endpoint now, without the Vite proxy '/api' prefix
-      const response = await axios.post('/proposals/converse', {
+      // Vercel routes our backend Python app to `/api/` 
+      // (or we hit a proxy locally as configured in vite.config.ts)
+      const response = await axios.post('/api/proposals/converse', {
         user_input: input,
         session_id: sessionId,
       })

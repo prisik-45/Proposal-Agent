@@ -4,8 +4,9 @@ import axios from 'axios'
 import App from './App.tsx'
 import './index.css'
 
-// Set the base URL for the backend API deployed on Render
-axios.defaults.baseURL = import.meta.env.VITE_API_URL || 'https://proposal-agent-oisv.onrender.com'
+// Because frontend and backend are deployed to the same Vercel project,
+// we just hit our own domain at the designated backend path prefix!
+axios.defaults.baseURL = import.meta.env.VITE_API_URL || ''
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
