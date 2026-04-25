@@ -6,6 +6,7 @@ interface MessageProps {
     type: 'user' | 'assistant'
     content: string
     timestamp: Date
+    pdfUrl?: string | null
   }
 }
 
@@ -24,8 +25,20 @@ const Message: React.FC<MessageProps> = ({ message }) => {
         {isUser ? (
           <p className="text-sm">{message.content}</p>
         ) : (
-          <div className="text-sm whitespace-pre-wrap break-words">
-            {message.content}
+          <div className="space-y-3">
+            <div className="text-sm whitespace-pre-wrap break-words">
+              {message.content}
+            </div>
+            {message.pdfUrl && (
+              <a
+                href={message.pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center rounded-md bg-gray-700 px-3 py-2 text-xs font-medium text-white hover:bg-gray-600 transition-colors"
+              >
+                View PDF
+              </a>
+            )}
           </div>
         )}
         <p className={`text-xs mt-2 ${isUser ? 'text-gray-300' : 'text-gray-400'}`}>

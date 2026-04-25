@@ -9,6 +9,7 @@ interface ChatMessage {
   type: 'user' | 'assistant'
   content: string
   timestamp: Date
+  pdfUrl?: string | null
 }
 
 const createSessionId = () => {
@@ -70,6 +71,7 @@ const ChatInterface: React.FC = () => {
       setExtractedParams(result.resolved_params || null)
 
       let assistantContent = ''
+      const pdfUrl = result.drive_link || result.pdf_data_url || null
       if (result.success) {
         const changedText = result.changed_fields?.length
           ? `\n\nChanged fields:\n- ${result.changed_fields.join('\n- ')}`
@@ -85,6 +87,7 @@ const ChatInterface: React.FC = () => {
         type: 'assistant',
         content: assistantContent,
         timestamp: new Date(),
+        pdfUrl,
       }
 
       setMessages(prev => [...prev, assistantMessage])
@@ -96,6 +99,7 @@ const ChatInterface: React.FC = () => {
         type: 'assistant',
         content: `Error: ${errorMessage}`,
         timestamp: new Date(),
+        pdfUrl: null,
       }
 
       setMessages(prev => [...prev, assistantMessage])
