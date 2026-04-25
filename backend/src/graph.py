@@ -489,9 +489,16 @@ def pdf_node(state: ProposalState) -> ProposalState:
 
 
 def drive_node(state: ProposalState) -> ProposalState:
-    file_id, link = upload_pdf_public(state["output_pdf_path"])
-    state["drive_file_id"] = file_id
-    state["drive_public_link"] = link
+    try:
+        file_id, link = upload_pdf_public(state["output_pdf_path"])
+        state["drive_file_id"] = file_id
+        state["drive_public_link"] = link
+    except Exception as exc:
+        # On Vercel/serverless, browser-based OAuth re-auth is unavailable.
+        # Treat upload as optional so proposal generation can still succeed.
+        state["drive_file_id"] = ""
+        state["drive_public_link"] = ""
+        state["drive_upload_error"] = str(exc)
     return state
 
 
