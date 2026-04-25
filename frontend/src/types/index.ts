@@ -3,6 +3,7 @@ export interface ProposalResponse {
   message: string
   drive_link?: string
   pdf_data_url?: string
+  pdf_download_url?: string
   extracted_params?: ExtractedParams
   error?: string
 }
@@ -14,6 +15,7 @@ export interface ProposalConversationResponse {
   resolved_params?: ExtractedParams
   drive_link?: string
   pdf_data_url?: string
+  pdf_download_url?: string
   updated_sections?: Record<string, string>
   retrieved_context?: Record<string, any>
   error?: string

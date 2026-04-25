@@ -9,7 +9,7 @@ interface ParametersDisplayProps {
 const ParametersDisplay: React.FC<ParametersDisplayProps> = ({ params, result }) => {
   if (!params && !result) return null
 
-  const pdfUrl = result?.drive_link || result?.pdf_data_url || null
+  const pdfUrl = result?.pdf_download_url || result?.drive_link || result?.pdf_data_url || null
 
   return (
     <div className="p-4 space-y-4">

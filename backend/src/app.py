@@ -3,7 +3,11 @@ FastAPI Backend for Proposal Agent - Chatbot Integration
 Approach B: One-shot natural language input with conversational responses
 """
 
+import base64
+import json
+from pathlib import Path
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional, Any, Dict, List
@@ -40,6 +44,7 @@ class ProposalResponse(BaseModel):
     message: str
     drive_link: Optional[str] = None
     pdf_data_url: Optional[str] = None
+    pdf_download_url: Optional[str] = None
     extracted_params: Optional[dict] = None
     error: Optional[str] = None
 
@@ -70,6 +75,7 @@ class ProposalConversationResponse(BaseModel):
     resolved_params: Optional[Dict[str, Any]] = None
     drive_link: Optional[str] = None
     pdf_data_url: Optional[str] = None
+    pdf_download_url: Optional[str] = None
     updated_sections: Optional[Dict[str, str]] = None
     full_proposal_md: Optional[str] = None
     retrieved_context: Optional[Dict[str, Any]] = None
@@ -255,10 +261,40 @@ def _generate_proposal_artifacts(extracted: Dict[str, Any]) -> Dict[str, str]:
     result = graph.invoke({
         "input": extracted
     })
+    payload = json.dumps(extracted, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    encoded_payload = base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
     return {
         "drive_link": result.get("drive_public_link", ""),
         "pdf_data_url": result.get("pdf_data_url", ""),
+        "pdf_download_url": f"/api/proposals/download-pdf?payload={encoded_payload}",
     }
+
+
+@app.get("/proposals/download-pdf")
+async def download_pdf(payload: str):
+    """Generate and stream a PDF directly from encoded proposal parameters."""
+    try:
+        padding = "=" * (-len(payload) % 4)
+        raw = base64.urlsafe_b64decode((payload + padding).encode("ascii")).decode("utf-8")
+        params = json.loads(raw)
+        if not isinstance(params, dict):
+            raise ValueError("Invalid proposal payload")
+
+        graph = build_graph()
+        result = graph.invoke({"input": params})
+        pdf_path = result.get("output_pdf_path")
+        if not pdf_path or not Path(pdf_path).exists():
+            raise FileNotFoundError("Generated PDF file not found")
+
+        return FileResponse(
+            pdf_path,
+            media_type="application/pdf",
+            filename=f"proposal-{params.get('client_business_name', 'client')}.pdf",
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Unable to generate PDF download: {exc}")
 
 
 def _is_new_proposal_request(user_input: str) -> bool:
@@ -349,7 +385,8 @@ async def converse_proposal(request: ProposalConversationRequest) -> Dict[str, A
             artifacts = _generate_proposal_artifacts(extracted)
             drive_link = artifacts["drive_link"]
             pdf_data_url = artifacts["pdf_data_url"]
-            session.current_params = {**extracted, "drive_link": drive_link, "pdf_data_url": pdf_data_url}
+            pdf_download_url = artifacts["pdf_download_url"]
+            session.current_params = {**extracted, "drive_link": drive_link, "pdf_data_url": pdf_data_url, "pdf_download_url": pdf_download_url}
             memory_store.add_turn(
                 session_id,
                 "user",
@@ -389,6 +426,7 @@ async def converse_proposal(request: ProposalConversationRequest) -> Dict[str, A
                 "resolved_params": session.current_params,
                 "drive_link": drive_link,
                 "pdf_data_url": pdf_data_url,
+                "pdf_download_url": pdf_download_url,
                 "updated_sections": {
                     "project_objective": _build_project_objective_section(session.current_params),
                     "scope_of_work": _build_scope_section(session.current_params),
@@ -430,7 +468,8 @@ async def converse_proposal(request: ProposalConversationRequest) -> Dict[str, A
         artifacts = _generate_proposal_artifacts(resolved)
         drive_link = artifacts["drive_link"]
         pdf_data_url = artifacts["pdf_data_url"]
-        resolved = {**resolved, "drive_link": drive_link, "pdf_data_url": pdf_data_url}
+        pdf_download_url = artifacts["pdf_download_url"]
+        resolved = {**resolved, "drive_link": drive_link, "pdf_data_url": pdf_data_url, "pdf_download_url": pdf_download_url}
 
         changed_fields = _interpret_update_changes(session.current_params, resolved)
         if not changed_fields:
@@ -486,7 +525,8 @@ async def converse_proposal(request: ProposalConversationRequest) -> Dict[str, A
             "changed_fields": changed_fields,
             "resolved_params": resolved,
             "drive_link": drive_link,
-                "pdf_data_url": pdf_data_url,
+            "pdf_data_url": pdf_data_url,
+            "pdf_download_url": pdf_download_url,
             "updated_sections": updated_sections,
             "full_proposal_md": full_md,
             "retrieved_context": {
@@ -548,12 +588,14 @@ async def generate_proposal(request: ProposalRequest):
         # Extract results
         drive_link = result.get("drive_public_link", "")
         pdf_data_url = result.get("pdf_data_url", "")
+        pdf_download_url = result.get("pdf_download_url", "")
         
         return ProposalResponse(
             success=True,
             message="Proposal generated successfully!",
             drive_link=drive_link,
             pdf_data_url=pdf_data_url,
+            pdf_download_url=pdf_download_url,
             extracted_params=extracted,
             error=None
         )
@@ -564,6 +606,7 @@ async def generate_proposal(request: ProposalRequest):
             message="Failed to generate proposal",
             drive_link=None,
             pdf_data_url=None,
+            pdf_download_url=None,
             extracted_params=extracted if 'extracted' in locals() else None,
             error=he.detail
         )
@@ -575,6 +618,7 @@ async def generate_proposal(request: ProposalRequest):
             message="Failed to generate proposal",
             drive_link=None,
             pdf_data_url=None,
+            pdf_download_url=None,
             extracted_params=extracted if 'extracted' in locals() else None,
             error=f"{str(e)}\n{error_trace}"
         )
