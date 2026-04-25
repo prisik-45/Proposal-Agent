@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import axios from 'axios'
 import Message from './Message'
 import ParametersDisplay from './ParametersDisplay'
-import { ProposalResponse } from '../types'
+import { ProposalConversationResponse, ExtractedParams } from '../types'
 
 interface ChatMessage {
   id: string
@@ -11,21 +11,27 @@ interface ChatMessage {
   timestamp: Date
 }
 
+const createSessionId = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID()
+  }
+  return `session-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
 const ChatInterface: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
       type: 'assistant',
-      content: 'Hello! 👋 I\'m your Proposal Agent. Describe your proposal requirements in natural language, and I\'ll generate a professional PDF proposal for you.\n\nExample: "Create proposal for TechCorp to build an AI agent in 60 days, budget ₹40,000-60,000, includes AI model development • API integration • 3 months support"',
+      content: 'Hello. I am your Proposal Agent. Share the client name, requirement, timeline, budget range, and deliverables, and I will prepare the proposal.',
       timestamp: new Date(),
     }
   ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [sessionId, setSessionId] = useState<string | null>(null)
-  const [extractedParams, setExtractedParams] = useState<any>(null)
-  const [currentState, setCurrentState] = useState<any>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [sessionId] = useState(createSessionId)
+  const [extractedParams, setExtractedParams] = useState<ExtractedParams | null>(null)
+  const [conversationResult, setConversationResult] = useState<ProposalConversationResponse | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = () => {
@@ -50,44 +56,26 @@ const ChatInterface: React.FC = () => {
     setMessages(prev => [...prev, userMessage])
     setInput('')
     setLoading(true)
-    setError(null)
 
     try {
-      // Call the conversational API
-      const response = await axios.post('http://localhost:8000/proposals/converse', {
+      const response = await axios.post('/api/proposals/converse', {
+        user_input: input,
         session_id: sessionId,
-        user_message: input
       })
 
-      const result = response.data
+      const result: ProposalConversationResponse = response.data
+      setConversationResult(result)
+      setExtractedParams(result.resolved_params || null)
 
-      // Update session ID on first message
-      if (!sessionId && result.session_id) {
-        setSessionId(result.session_id)
-      }
-
-      // Store results
-      setExtractedParams(result.current_params)
-      setCurrentState(result.current_state)
-
-      // Add assistant message with result
       let assistantContent = ''
-      
       if (result.success) {
-        assistantContent = `${result.message}\n\n`
-        
-        if (result.is_modification) {
-          assistantContent += `📝 **Modified Fields:**\n`
-          Object.entries(result.changes_detected).forEach(([key, value]) => {
-            assistantContent += `- ${key}: ${value}\n`
-          })
-        }
-        
-        if (result.drive_link) {
-          assistantContent += `\n📥 [Download PDF from Google Drive](${result.drive_link})`
-        }
+        const changedText = result.changed_fields?.length
+          ? `\n\nChanged fields:\n- ${result.changed_fields.join('\n- ')}`
+          : ''
+
+        assistantContent = `${result.message}${changedText}`
       } else {
-        assistantContent = `❌ Error: ${result.error || 'Unknown error occurred'}`
+        assistantContent = `Failed to update proposal.\n\nError: ${result.error || 'Unknown error occurred'}`
       }
 
       const assistantMessage: ChatMessage = {
@@ -99,51 +87,12 @@ const ChatInterface: React.FC = () => {
 
       setMessages(prev => [...prev, assistantMessage])
     } catch (err: any) {
-      const errorMessage = err.response?.data?.detail || err.message || 'Failed to process request'
-      setError(errorMessage)
+      const errorMessage = err.response?.data?.detail || err.message || 'Failed to update proposal'
 
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         type: 'assistant',
-        content: `❌ Error: ${errorMessage}`,
-        timestamp: new Date(),
-      }
-
-      setMessages(prev => [...prev, assistantMessage])
-    } finally {
-      setLoading(false)
-    }
-  }
-
-      // Store results
-      setExtractedParams(result.extracted_params)
-      setProposalResult(result)
-
-      // Add assistant message with result
-      let assistantContent = ''
-      
-      if (result.success) {
-        assistantContent = `**Proposal Generated Successfully!**\n\nYour proposal has been created and saved to Google Drive.\n\n📊 **Extracted Parameters:**\n- Client: ${result.extracted_params?.client_business_name || 'N/A'}\n- Timeline: ${result.extracted_params?.timeline_days || 'N/A'} days\n- Budget: ₹${result.extracted_params?.price_min || 'N/A'} - ₹${result.extracted_params?.price_max || 'N/A'}`
-      } else {
-        assistantContent = `**Failed to Generate Proposal**\n\nError: ${result.error || 'Unknown error occurred'}`
-      }
-
-      const assistantMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        type: 'assistant',
-        content: assistantContent,
-        timestamp: new Date(),
-      }
-
-      setMessages(prev => [...prev, assistantMessage])
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.detail || err.message || 'Failed to generate proposal'
-      setError(errorMessage)
-
-      const assistantMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        type: 'assistant',
-        content: ` Error: ${errorMessage}`,
+        content: `Error: ${errorMessage}`,
         timestamp: new Date(),
       }
 
@@ -163,9 +112,16 @@ const ChatInterface: React.FC = () => {
   return (
     <div className="flex h-full flex-col bg-gray-900">
       {/* Header */}
-      <div className="border-b border-gray-800 bg-gray-950 px-6 py-4">
-        <h1 className="text-2xl font-bold text-white">Proposal Agent</h1>
-        <p className="text-sm text-gray-400">By Tarkshy Consultancy Services</p>
+      <div className="flex items-center justify-between border-b border-gray-800 bg-gray-950 px-6 py-4">
+        <div>
+          <h1 className="text-2xl text-white">Proposal Agent</h1>
+          <p className="text-sm text-gray-400">By Tarkshy Consultancy Services</p>
+        </div>
+        <img
+          src="/final_logo.png"
+          alt="Tarkshy"
+          className="h-14 w-14 object-contain"
+        />
       </div>
 
       {/* Main Content */}
@@ -204,7 +160,7 @@ const ChatInterface: React.FC = () => {
               <button
                 onClick={handleSendMessage}
                 disabled={loading || !input.trim()}
-                className="bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 text-white font-medium py-3 px-6 rounded-lg transition-colors"
+                className="bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 text-white py-3 px-6 rounded-lg transition-colors"
               >
                 {loading ? 'Generating...' : 'Send'}
               </button>
@@ -213,51 +169,12 @@ const ChatInterface: React.FC = () => {
         </div>
 
         {/* Sidebar - Parameters and Result */}
-        {(extractedParams || currentState) && (
+        {(extractedParams || conversationResult) && (
           <div className="w-80 border-l border-gray-800 overflow-y-auto bg-gray-950">
-            <div className="p-4 space-y-4">
-              {/* Session Info */}
-              {sessionId && (
-                <div className="text-xs text-gray-400 truncate">
-                  Session: {sessionId.substring(0, 12)}...
-                </div>
-              )}
-              
-              {/* Parameters */}
-              {extractedParams && (
-                <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
-                  <h3 className="font-semibold text-sm text-gray-100 mb-3">📋 Current Parameters</h3>
-                  <div className="space-y-2 text-xs">
-                    {extractedParams.client_business_name && (
-                      <div>
-                        <p className="text-gray-400">Client</p>
-                        <p className="text-gray-100 font-medium">{extractedParams.client_business_name}</p>
-                      </div>
-                    )}
-                    {extractedParams.timeline_days && (
-                      <div>
-                        <p className="text-gray-400">Timeline</p>
-                        <p className="text-gray-100 font-medium">{extractedParams.timeline_days} days</p>
-                      </div>
-                    )}
-                    {(extractedParams.price_min || extractedParams.price_max) && (
-                      <div>
-                        <p className="text-gray-400">Budget</p>
-                        <p className="text-gray-100 font-medium">
-                          ₹{extractedParams.price_min} - ₹{extractedParams.price_max}
-                        </p>
-                      </div>
-                    )}
-                    {extractedParams.client_requirements && (
-                      <div>
-                        <p className="text-gray-400">Requirements</p>
-                        <p className="text-gray-300 line-clamp-2">{extractedParams.client_requirements}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            <ParametersDisplay 
+              params={extractedParams} 
+              result={conversationResult}
+            />
           </div>
         )}
       </div>

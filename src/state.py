@@ -1,4 +1,4 @@
-from typing import List, Optional, TypedDict
+from typing import Optional, TypedDict
 
 
 class ProposalInput(TypedDict, total=False):
@@ -8,6 +8,7 @@ class ProposalInput(TypedDict, total=False):
     price_min: str
     price_max: str
     includes_text: str
+    technology_stack_text: str
     # Optional word limits for sections
     scope_of_work_max_words: int
     project_objective_max_words: int
@@ -17,8 +18,8 @@ class ProposalInput(TypedDict, total=False):
 
 class ProposalState(TypedDict, total=False):
     input: ProposalInput
-    market_research: List[str]
     computed_budget_inr: str
+    budget_guidance: str
     section_text: str
     html_content: str
     output_pdf_path: str

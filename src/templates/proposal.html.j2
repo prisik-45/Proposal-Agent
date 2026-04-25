@@ -6,6 +6,11 @@
     @page {
       size: A4;
       margin: 26mm 12mm 25mm 12mm;
+
+      @bottom-center {
+        content: element(pageFooter);
+        width: 100%;
+      }
     }
 
     body {
@@ -15,7 +20,6 @@
       font-size: 13px;
       background: #ffffff;
       margin: 0;
-      counter-reset: pageIndex;
     }
 
     .global-header {
@@ -49,25 +53,23 @@
     }
 
     .global-footer {
-      position: fixed;
-      bottom: -4mm;
-      left: 12mm;
-      right: 12mm;
+      position: running(pageFooter);
+      margin: 0 12mm;
       display: flex;
       justify-content: space-between;
       align-items: center;
       border-top: 1px solid #111111;
       padding-top: 2.2mm;
-      font-size: 10px;
+      font-size: 10.5px;
       color: #111111;
+      line-height: 1.2;
     }
 
     .global-footer-page::after {
-      counter-increment: pageIndex;
-      content: "Page " counter(pageIndex);
+      content: "Page " counter(page);
       font-weight: 700;
       letter-spacing: 0.06em;
-  }
+    }
 
     .proposal-table {
       width: 100%;
@@ -333,9 +335,8 @@
     <div class="global-header-left">{{ agency_name }} Consultancy Services</div>
     <div class="global-header-right">{{ proposal_title_header }}</div>
   </div>
-
   <div class="global-footer" aria-hidden="true">
-    <div>Confidential | {{ agency_name }} </div>
+    <div>Confidential | {{ agency_name }}</div>
     <div class="global-footer-page"></div>
   </div>
 

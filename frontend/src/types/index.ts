@@ -6,6 +6,17 @@ export interface ProposalResponse {
   error?: string
 }
 
+export interface ProposalConversationResponse {
+  success: boolean
+  message: string
+  changed_fields?: string[]
+  resolved_params?: ExtractedParams
+  drive_link?: string
+  updated_sections?: Record<string, string>
+  retrieved_context?: Record<string, any>
+  error?: string
+}
+
 export interface ExtractedParams {
   client_business_name: string
   client_requirements: string
@@ -13,6 +24,7 @@ export interface ExtractedParams {
   price_min: string
   price_max: string
   includes_text: string
+  technology_stack_text?: string
   scope_of_work_max_words?: number
   project_objective_max_words?: number
   technology_stack_max_words?: number

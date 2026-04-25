@@ -6,15 +6,20 @@ Approach B: One-shot natural language input with conversational responses
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Any, Dict, List
+import re
+import time
 import traceback
 
 from src.graph import build_graph
-from src.nlp_parser import extract_proposal_params, validate_extracted_params, format_extracted_params
-from src.pinecone_memory import get_memory
-from src.conversation_manager import get_manager
-
-import uuid
+from src.memory_store import MemoryStore
+from src.nlp_parser import (
+    extract_proposal_params,
+    validate_extracted_params,
+    format_extracted_params,
+    extract_update_fields,
+)
+from src.proposal_system_prompt import PROPOSAL_AGENT_SYSTEM_PROMPT
 
 
 # ========== Pydantic Models ==========
@@ -43,47 +48,29 @@ class HealthResponse(BaseModel):
     message: str
 
 
-# ========== Conversational Proposal Models ==========
-
-class ConversationRequest(BaseModel):
-    """Conversational proposal message with session tracking"""
-    session_id: Optional[str] = Field(
-        None,
-        description="Session ID for conversation continuity (auto-generated if not provided)"
-    )
-    user_message: str = Field(
+class ProposalConversationRequest(BaseModel):
+    """Request structure for conversational proposal updates."""
+    user_input: str = Field(
         ...,
-        description="User message - can be initial proposal request or modification",
-        example="Change the timeline to 40 days"
+        description="Natural language user input for proposal creation or incremental updates",
+        example="Change timeline to 40 days"
+    )
+    session_id: Optional[str] = Field(
+        default="default",
+        description="Optional session identifier for conversation memory"
     )
 
 
-class ConversationResponse(BaseModel):
-    """Response from conversational proposal endpoint"""
+class ProposalConversationResponse(BaseModel):
     success: bool
     message: str
-    session_id: str
-    is_modification: bool
-    changes_detected: dict
-    current_params: Optional[dict] = None
-    current_state: Optional[dict] = None
+    changed_fields: Optional[List[str]] = None
+    resolved_params: Optional[Dict[str, Any]] = None
     drive_link: Optional[str] = None
+    updated_sections: Optional[Dict[str, str]] = None
+    full_proposal_md: Optional[str] = None
+    retrieved_context: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
-
-
-class SessionStartResponse(BaseModel):
-    """Response when starting a new session"""
-    session_id: str
-    message: str
-    initial_prompt: str
-
-
-class SessionHistoryResponse(BaseModel):
-    """Response containing session conversation history"""
-    session_id: str
-    turn_count: int
-    history: list
-    current_proposal_state: Optional[dict] = None
 
 
 # ========== FastAPI App ==========
@@ -103,6 +90,202 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+memory_store = MemoryStore()
+
+
+def _format_inr(amount: int) -> str:
+    """Format integer INR values with Indian comma grouping."""
+    amount_str = str(amount)
+    if len(amount_str) <= 3:
+        return f"₹{amount_str}"
+
+    last_three = amount_str[-3:]
+    remaining = amount_str[:-3]
+    groups = []
+    while len(remaining) > 2:
+        groups.insert(0, remaining[-2:])
+        remaining = remaining[:-2]
+    if remaining:
+        groups.insert(0, remaining)
+    return f"₹{','.join(groups)},{last_three}"
+
+
+def _format_timeline(days: int) -> str:
+    weeks = days / 7
+    approx = f"{weeks:.1f}".rstrip('0').rstrip('.')
+    return f"{days} days (≈ {approx} weeks)"
+
+
+def _build_timeline_section(params: Dict[str, Any]) -> str:
+    timeline = params.get("timeline_days", 0)
+    return (
+        "## Timeline\n"
+        f"The project is planned for {_format_timeline(timeline)}. "
+        "We will work in focused stages to deliver meaningful progress and maintain flexibility for refinement."
+    )
+
+
+def _build_budget_section(params: Dict[str, Any]) -> str:
+    min_budget = int(str(params.get("price_min", "0")).replace(',', ''))
+    max_budget = int(str(params.get("price_max", "0")).replace(',', ''))
+    return (
+        "## Budget Breakdown\n"
+        f"Estimated project cost: {_format_inr(min_budget)} to {_format_inr(max_budget)}. "
+        "This estimate covers development, integration, testing, and initial support as outlined below."
+    )
+
+
+def _budget_guidance_text(params: Dict[str, Any]) -> str:
+    min_budget = int(str(params.get("price_min", "0")).replace(',', ''))
+    max_budget = int(str(params.get("price_max", "0")).replace(',', ''))
+    midpoint = (min_budget + max_budget) / 2
+
+    if midpoint <= 50_000:
+        return (
+            "The scope should stay focused on essential features, a clean user experience, "
+            "basic integrations, testing, and launch readiness."
+        )
+    if midpoint <= 150_000:
+        return (
+            "The scope can include a polished core build, responsive UI, practical integrations, "
+            "testing, deployment support, and a reasonable refinement cycle."
+        )
+    return (
+        "The scope can support a more comprehensive build with custom UX, richer integrations, "
+        "automation, analytics, performance optimization, and stronger post-launch support."
+    )
+
+
+def _build_project_objective_section(params: Dict[str, Any]) -> str:
+    min_budget = int(str(params.get("price_min", "0")).replace(',', ''))
+    max_budget = int(str(params.get("price_max", "0")).replace(',', ''))
+    return (
+        "## Project Objective\n"
+        f"The objective is to deliver a practical {params.get('client_requirements', 'solution')} for "
+        f"{params.get('client_business_name', 'the client')} within the provided budget range of "
+        f"{_format_inr(min_budget)} to {_format_inr(max_budget)}. "
+        f"{_budget_guidance_text(params)}"
+    )
+
+
+def _build_scope_section(params: Dict[str, Any]) -> str:
+    includes = params.get("includes_text", "the agreed project deliverables")
+    return (
+        "## Scope of Work\n"
+        f"The scope will cover {includes}. "
+        f"{_budget_guidance_text(params)} "
+        "Any advanced items outside this agreed scope should be treated as a separate phase or estimate."
+    )
+
+
+def _build_technology_stack_section(params: Dict[str, Any]) -> str:
+    technology = params.get("technology_stack_text")
+    if technology:
+        return (
+            "## Technology Stack\n"
+            f"The proposal will use the requested technology stack: {technology}."
+        )
+
+    requirements = str(params.get("client_requirements", "")).lower()
+    if "website" in requirements or "web" in requirements or "ecommerce" in requirements or "e-commerce" in requirements:
+        return (
+            "## Technology Stack\n"
+            "Frontend: Next.js / React. Styling: Tailwind CSS / CSS Modules / Styled Components. "
+            "Backend: Node.js and Express.js if required. Database: PostgreSQL / Supabase or VPS-hosted DB as per client requirements. "
+            "Hosting: Vercel / VPS."
+        )
+    if "ai" in requirements or "automation" in requirements or "agent" in requirements or "chatbot" in requirements:
+        return (
+            "## Technology Stack\n"
+            "AI / LLM: OpenAI, Groq, or Anthropic as per use case. Orchestration: LangChain / LangGraph. "
+            "Backend: FastAPI / Node.js. Database: PostgreSQL / Supabase, with vector database support if retrieval is required. "
+            "Hosting: VPS / cloud deployment."
+        )
+    if "social" in requirements or "media" in requirements:
+        return (
+            "## Technology Stack\n"
+            "Planning: Notion / Google Workspace. Design: Figma / Canva / Adobe tools. "
+            "Publishing: Meta Business Suite and relevant scheduling platforms. Analytics: platform analytics and reporting dashboards. "
+            "Automation: Zapier / Make where useful."
+        )
+    return (
+        "## Technology Stack\n"
+        "The technology stack will be selected according to the final project requirements, budget, integrations, and deployment needs."
+    )
+
+
+def _build_deliverables_section(params: Dict[str, Any]) -> str:
+    includes = params.get("includes_text", "Key deliverables will be provided as part of this engagement.")
+    bullets = "\n".join([f"- {item.strip()}" for item in includes.split('•') if item.strip()])
+    return (
+        "## Deliverables\n"
+        "The proposal includes the following deliverables:\n"
+        f"{bullets}"
+    )
+
+
+def _build_full_proposal_md(params: Dict[str, Any]) -> str:
+    return "\n\n".join([
+        f"# Proposal for {params.get('client_business_name', 'Client')}" ,
+        "## Executive Summary\n"
+        f"We propose to build a tailored {params.get('client_requirements', 'solution')} for {params.get('client_business_name', 'the client')} that delivers measurable business impact and a premium digital experience.",
+        _build_project_objective_section(params),
+        _build_scope_section(params),
+        _build_technology_stack_section(params),
+        _build_timeline_section(params),
+        _build_budget_section(params),
+        _build_deliverables_section(params),
+        "## Team & Expertise\n"
+        "Our team brings proven experience in AI-led products, API-first development, and end-to-end delivery for enterprise clients.",
+        "## Terms\n"
+        "A phased engagement model and milestone-based payment schedule will ensure transparency, quality, and predictable delivery."
+    ])
+
+
+def _generate_proposal_drive_link(extracted: Dict[str, Any]) -> str:
+    graph = build_graph()
+    result = graph.invoke({
+        "input": extracted
+    })
+    return result.get("drive_public_link", "")
+
+
+def _is_new_proposal_request(user_input: str) -> bool:
+    return bool(
+        re.search(
+            r'\b(?:create|generate|make|prepare|draft)\s+(?:a\s+)?proposal\b|\bproposal\s+for\b',
+            user_input,
+            re.IGNORECASE,
+        )
+    )
+
+
+def _interpret_update_changes(current_params: Dict[str, Any], updates: Dict[str, Any]) -> List[str]:
+    changed_fields: List[str] = []
+    if not current_params:
+        return changed_fields
+
+    if "timeline_days" in updates and updates["timeline_days"] != current_params.get("timeline_days"):
+        changed_fields.append(
+            f"timeline_days: {current_params.get('timeline_days')} -> {updates['timeline_days']}"
+        )
+    if "price_min" in updates and str(updates["price_min"]) != str(current_params.get("price_min")):
+        changed_fields.append(
+            f"budget_inr.min: {current_params.get('price_min')} -> {updates['price_min']}"
+        )
+    if "price_max" in updates and str(updates["price_max"]) != str(current_params.get("price_max")):
+        changed_fields.append(
+            f"budget_inr.max: {current_params.get('price_max')} -> {updates['price_max']}"
+        )
+    if "includes_text" in updates and updates["includes_text"] != current_params.get("includes_text"):
+        changed_fields.append("includes_text: updated deliverables")
+    if (
+        "technology_stack_text" in updates
+        and updates["technology_stack_text"] != current_params.get("technology_stack_text")
+    ):
+        changed_fields.append("technology_stack: updated")
+    return changed_fields
+
 
 # ========== Health Check ==========
 
@@ -115,6 +298,191 @@ async def health_check():
         status="healthy",
         message="Proposal Agent API is running and ready to accept requests"
     )
+
+
+class SystemPromptResponse(BaseModel):
+    """System prompt response"""
+    system_prompt: str
+
+
+@app.get("/prompt/system", response_model=SystemPromptResponse)
+async def get_system_prompt():
+    """Get the Proposal Agent system prompt for /v1/messages integration."""
+    return SystemPromptResponse(system_prompt=PROPOSAL_AGENT_SYSTEM_PROMPT)
+
+
+@app.post("/proposals/converse", response_model=Dict[str, Any])
+async def converse_proposal(request: ProposalConversationRequest) -> Dict[str, Any]:
+    """Handle conversational proposal updates with session memory."""
+    try:
+        session_id = request.session_id or "default"
+        session = memory_store.get_session(session_id)
+        retrieved_turns = memory_store.retrieve_similar_turns(session_id, request.user_input)
+
+        if session.current_params and _is_new_proposal_request(request.user_input):
+            session.turns.clear()
+            session.current_params = None
+            retrieved_turns = []
+
+        if not session.current_params:
+            extracted = extract_proposal_params(request.user_input)
+            is_valid, error_msg = validate_extracted_params(extracted)
+            if not is_valid:
+                return {
+                    "success": False,
+                    "message": "I could not create the proposal yet. Please provide the missing details and I will continue.",
+                    "error": error_msg,
+                }
+
+            extracted = format_extracted_params(extracted)
+            drive_link = _generate_proposal_drive_link(extracted)
+            session.current_params = {**extracted, "drive_link": drive_link}
+            memory_store.add_turn(
+                session_id,
+                "user",
+                request.user_input,
+                {
+                    "params": extracted,
+                    "proposal_sections": [
+                        "executive_summary",
+                        "scope_of_work",
+                        "technical_architecture",
+                        "timeline",
+                        "budget_breakdown",
+                        "deliverables",
+                        "team_and_expertise",
+                        "terms",
+                    ],
+                    "timestamp": int(time.time()),
+                },
+            )
+            memory_store.add_turn(
+                session_id,
+                "assistant",
+                "Initial proposal created and stored in conversation memory.",
+                {
+                    "params": session.current_params,
+                    "timestamp": int(time.time()),
+                },
+            )
+
+            full_md = _build_full_proposal_md(session.current_params)
+            return {
+                "success": True,
+                "message": "Proposal created successfully. I used your timeline, budget range, and deliverables to prepare the PDF.",
+                "changed_fields": [
+                    f"client_business_name: None -> {session.current_params.get('client_business_name')}"
+                ],
+                "resolved_params": session.current_params,
+                "drive_link": drive_link,
+                "updated_sections": {
+                    "project_objective": _build_project_objective_section(session.current_params),
+                    "scope_of_work": _build_scope_section(session.current_params),
+                    "timeline": _build_timeline_section(session.current_params),
+                    "budget": _build_budget_section(session.current_params),
+                },
+                "full_proposal_md": full_md,
+                "retrieved_context": {
+                    "retrieved_turns": retrieved_turns,
+                    "current_params": None,
+                },
+            }
+
+        updates = extract_update_fields(request.user_input)
+        if not updates:
+            return {
+                "success": False,
+                "message": "I could not detect a clear update. Please specify the timeline, budget range, or deliverables you want to change.",
+                "error": "Ambiguous update request",
+                "retrieved_context": {
+                    "retrieved_turns": retrieved_turns,
+                    "current_params": session.current_params,
+                },
+            }
+
+        resolved = {**session.current_params, **updates}
+        resolved = format_extracted_params(resolved)
+        is_valid, error_msg = validate_extracted_params(resolved)
+        if not is_valid:
+            return {
+                "success": False,
+                "message": "The updated proposal details are invalid. Please revise the input and I will try again.",
+                "error": error_msg,
+                "retrieved_context": {
+                    "retrieved_turns": retrieved_turns,
+                    "current_params": session.current_params,
+                },
+            }
+        drive_link = _generate_proposal_drive_link(resolved)
+        resolved = {**resolved, "drive_link": drive_link}
+
+        changed_fields = _interpret_update_changes(session.current_params, resolved)
+        if not changed_fields:
+            return {
+                "success": False,
+                "message": "No meaningful changes were detected from the latest input.",
+                "error": "No changes detected",
+                "retrieved_context": {
+                    "retrieved_turns": retrieved_turns,
+                    "current_params": session.current_params,
+                },
+            }
+
+        session.current_params = resolved
+        memory_store.add_turn(
+            session_id,
+            "user",
+            request.user_input,
+            {
+                "params": resolved,
+                "proposal_sections": [
+                    "executive_summary",
+                    "scope_of_work",
+                    "technical_architecture",
+                    "timeline",
+                    "budget_breakdown",
+                    "deliverables",
+                    "team_and_expertise",
+                    "terms",
+                ],
+                "timestamp": int(time.time()),
+            },
+        )
+
+        updated_sections: Dict[str, str] = {}
+        if any(field.startswith("timeline_days") for field in changed_fields):
+            updated_sections["timeline"] = _build_timeline_section(resolved)
+            updated_sections["deliverables"] = _build_deliverables_section(resolved)
+        if any("budget_inr" in field for field in changed_fields):
+            updated_sections["project_objective"] = _build_project_objective_section(resolved)
+            updated_sections["scope_of_work"] = _build_scope_section(resolved)
+            updated_sections["budget"] = _build_budget_section(resolved)
+        if "includes_text: updated deliverables" in changed_fields:
+            updated_sections["scope_of_work"] = _build_scope_section(resolved)
+            updated_sections["deliverables"] = _build_deliverables_section(resolved)
+        if "technology_stack: updated" in changed_fields:
+            updated_sections["technology_stack"] = _build_technology_stack_section(resolved)
+
+        full_md = _build_full_proposal_md(resolved)
+        return {
+            "success": True,
+            "message": "Proposal updated successfully. I regenerated the sections affected by your latest changes.",
+            "changed_fields": changed_fields,
+            "resolved_params": resolved,
+            "drive_link": drive_link,
+            "updated_sections": updated_sections,
+            "full_proposal_md": full_md,
+            "retrieved_context": {
+                "retrieved_turns": retrieved_turns,
+                "current_params": session.current_params,
+            },
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": "An unexpected error occurred while updating the proposal.",
+            "error": str(e),
+        }
 
 
 # ========== Proposal Generation Endpoint ==========
@@ -221,210 +589,6 @@ async def debug_extract_params(request: ProposalRequest):
         validation_error=error_msg,
         formatted_params=formatted
     )
-
-
-# ========== Conversational Proposal Endpoints ==========
-
-@app.post("/proposals/session/start", response_model=SessionStartResponse)
-async def start_session():
-    """
-    Start a new conversational proposal session.
-    
-    Returns:
-    - session_id: Unique identifier for conversation
-    - initial_prompt: Instructions for the user
-    """
-    session_id = str(uuid.uuid4())
-    
-    return SessionStartResponse(
-        session_id=session_id,
-        message="Conversational session started",
-        initial_prompt="Welcome! Describe your proposal requirements in natural language. Example: 'Create proposal for TechCorp to build AI agent in 60 days, budget ₹40,000-60,000, includes AI development • API integration • 3 months support'"
-    )
-
-
-@app.post("/proposals/converse", response_model=ConversationResponse)
-async def converse_proposal(request: ConversationRequest):
-    """
-    Conversational proposal modification endpoint.
-    Supports both initial proposal generation and iterative modifications.
-    
-    Features:
-    - Session-based memory with Pinecone
-    - Natural language modification understanding
-    - LLM-powered intent recognition
-    - Automatic proposal regeneration on changes
-    
-    Args:
-        session_id: Optional - auto-generated if not provided
-        user_message: User's natural language input
-    
-    Example flow:
-        1. User: "Create proposal for ABC Company..."
-        2. Bot: Generates proposal
-        3. User: "Change timeline to 40 days"
-        4. Bot: Detects modification, updates, regenerates
-    """
-    try:
-        # Generate session ID if not provided
-        session_id = request.session_id or str(uuid.uuid4())
-        user_message = request.user_message.strip()
-        
-        if not user_message:
-            raise ValueError("user_message cannot be empty")
-        
-        # Get Pinecone memory and conversation manager
-        memory = get_memory()
-        manager = get_manager()
-        
-        # Retrieve conversation context
-        context = memory.retrieve_conversation_context(
-            session_id=session_id,
-            query=user_message,
-            top_k=3
-        )
-        
-        # Get current proposal state
-        current_state_record = memory.get_latest_proposal_state(session_id)
-        current_state = current_state_record.get("state", {}) if current_state_record else {}
-        current_params = current_state_record.get("params", {}) if current_state_record else {}
-        turn_number = (current_state_record.get("turn_number", 0) + 1) if current_state_record else 1
-        
-        # Understand if this is a modification or new proposal
-        is_modification, changes, explanation = manager.understand_modification(
-            user_message, 
-            current_params,
-            context
-        )
-        
-        # Process based on type
-        if is_modification and current_params:
-            # Update existing proposal
-            updated_params = current_params.copy()
-            updated_params.update(changes)
-            
-            # Validate
-            is_valid, error_msg = validate_extracted_params(updated_params)
-            if not is_valid:
-                raise ValueError(f"Invalid parameters after modification: {error_msg}")
-            
-            # Format
-            updated_params = format_extracted_params(updated_params)
-            
-            # Regenerate proposal with updated params
-            graph = build_graph()
-            result = graph.invoke({"input": updated_params})
-            drive_link = result.get("drive_public_link", "")
-            
-            assistant_response = f"✅ {explanation}\nRegenerated proposal with updates!"
-            
-        else:
-            # Initial proposal generation
-            extracted = extract_proposal_params(user_message)
-            is_valid, error_msg = validate_extracted_params(extracted)
-            
-            if not is_valid:
-                raise ValueError(f"Missing required fields: {error_msg}")
-            
-            extracted = format_extracted_params(extracted)
-            updated_params = extracted
-            
-            # Generate proposal
-            graph = build_graph()
-            result = graph.invoke({"input": extracted})
-            drive_link = result.get("drive_public_link", "")
-            
-            assistant_response = "✅ Proposal generated successfully! You can now make modifications like 'Change timeline to X days' or 'Update budget to Y'"
-            is_modification = False
-            changes = {}
-        
-        # Store conversation turn in memory
-        memory.store_conversation_turn(
-            session_id=session_id,
-            turn_number=turn_number,
-            user_message=user_message,
-            assistant_response=assistant_response,
-            proposal_params=updated_params,
-            proposal_state=result if 'result' in locals() else {}
-        )
-        
-        return ConversationResponse(
-            success=True,
-            message=assistant_response,
-            session_id=session_id,
-            is_modification=is_modification,
-            changes_detected=changes,
-            current_params=updated_params,
-            current_state=result if 'result' in locals() else {},
-            drive_link=drive_link,
-            error=None
-        )
-        
-    except Exception as e:
-        error_trace = traceback.format_exc()
-        return ConversationResponse(
-            success=False,
-            message="Failed to process conversation",
-            session_id=request.session_id or "unknown",
-            is_modification=False,
-            changes_detected={},
-            current_params=None,
-            current_state=None,
-            drive_link=None,
-            error=f"{str(e)}\n{error_trace}"
-        )
-
-
-@app.get("/proposals/session/{session_id}/history", response_model=SessionHistoryResponse)
-async def get_session_history(session_id: str):
-    """
-    Retrieve full conversation history for a session.
-    
-    Args:
-        session_id: Session identifier
-    
-    Returns:
-        Full conversation history and current state
-    """
-    try:
-        memory = get_memory()
-        
-        history = memory.get_session_history(session_id, limit=50)
-        current_state = memory.get_latest_proposal_state(session_id)
-        
-        return SessionHistoryResponse(
-            session_id=session_id,
-            turn_count=len(history),
-            history=history,
-            current_proposal_state=current_state.get("state") if current_state else None
-        )
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.delete("/proposals/session/{session_id}")
-async def delete_session(session_id: str):
-    """
-    Clear conversation history for a session.
-    
-    Args:
-        session_id: Session identifier
-    
-    Returns:
-        Confirmation message
-    """
-    try:
-        memory = get_memory()
-        success = memory.clear_session(session_id)
-        
-        if success:
-            return {"success": True, "message": f"Session {session_id} cleared"}
-        else:
-            raise Exception("Failed to clear session")
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ========== Error Handler ==========

@@ -1,5 +1,3 @@
-import React, { useState } from 'react'
-import axios from 'axios'
 import ChatInterface from './components/ChatInterface'
 
 function App() {

@@ -9,7 +9,6 @@ from src.pdf_builder import render_pdf
 from src.state import ProposalState
 from src.tools.drive import upload_pdf_public
 from src.tools.groq_client import get_groq_client
-from src.tools.research import serper_search
 
 
 FIXED_INTRODUCTION_HTML = """
@@ -166,6 +165,136 @@ def _build_pricing_html(price_min: str, price_max: str, includes_text: str) -> s
     return html
 
 
+def _parse_budget_value(value: str) -> int:
+    digits = "".join(ch for ch in str(value) if ch.isdigit())
+    return int(digits or "0")
+
+
+def _format_budget_range(price_min: str, price_max: str) -> str:
+    return f"INR {_parse_budget_value(price_min):,} to INR {_parse_budget_value(price_max):,}"
+
+
+def _budget_guidance(price_min: str, price_max: str) -> str:
+    min_value = _parse_budget_value(price_min)
+    max_value = _parse_budget_value(price_max)
+    midpoint = (min_value + max_value) / 2
+
+    if midpoint <= 50_000:
+        return (
+            "Lean budget. Prioritize the core business objective, essential pages or workflows, "
+            "standard UI components, basic integrations, testing, and launch readiness. "
+            "Avoid promising advanced automation, complex admin panels, heavy custom animation, "
+            "or large multi-module builds unless the user included them explicitly."
+        )
+    if midpoint <= 150_000:
+        return (
+            "Balanced budget. Include a polished core solution, responsive UI, practical integrations, "
+            "content structure, testing, deployment support, and reasonable refinement. "
+            "Keep advanced features scoped clearly as optional or phased when they exceed the budget."
+        )
+    return (
+        "Premium budget. Include a more comprehensive scope with custom UX, stronger automation, "
+        "richer integrations, performance optimization, analytics, admin or workflow tooling where relevant, "
+        "and more complete post-launch support."
+    )
+
+
+def _technology_rows_from_override(technology_text: str) -> list[tuple[str, str]]:
+    text = technology_text.strip()
+    lower = text.lower()
+    rows: list[tuple[str, str]] = []
+
+    layer_keywords = [
+        ("Frontend", ["next", "react", "vue", "angular", "frontend"]),
+        ("Styling", ["tailwind", "css", "bootstrap", "styled"]),
+        ("Backend", ["node", "express", "fastapi", "django", "flask", "backend"]),
+        ("Database", ["postgres", "mysql", "mongodb", "mongo", "supabase", "database", "db"]),
+        ("AI / LLM", ["openai", "groq", "langchain", "langgraph", "llm", "ai"]),
+        ("Automation", ["zapier", "make", "n8n", "webhook", "automation"]),
+        ("Hosting", ["vercel", "aws", "azure", "gcp", "vps", "hosting", "cloud"]),
+    ]
+
+    parts = [part.strip(" .") for part in text.replace(" and ", ", ").split(",") if part.strip(" .")]
+    used_parts: set[str] = set()
+    for layer, keywords in layer_keywords:
+        matches = [part for part in parts if any(keyword in part.lower() for keyword in keywords)]
+        if matches:
+            rows.append((layer, " / ".join(matches)))
+            used_parts.update(matches)
+
+    remaining = [part for part in parts if part not in used_parts]
+    if remaining:
+        rows.append(("Additional Tools", " / ".join(remaining)))
+
+    return rows or [("Requested Stack", text)]
+
+
+def _default_technology_rows(client_requirements: str) -> list[tuple[str, str]]:
+    req = client_requirements.lower()
+
+    if "website" in req or "web" in req or "ecommerce" in req or "e-commerce" in req:
+        return [
+            ("Frontend", "Next.js / React - or other frameworks as per project requirements"),
+            ("Styling", "Tailwind CSS / CSS Modules / Styled Components"),
+            ("Backend", "Node.js, Express.js (if required)"),
+            ("Database", "PostgreSQL (Supabase) / VPS-hosted DB - as per client requirements"),
+            ("Hosting", "Vercel / VPS"),
+        ]
+
+    if "ai" in req or "automation" in req or "agent" in req or "chatbot" in req:
+        return [
+            ("AI / LLM", "OpenAI / Groq / Anthropic - selected as per use case and budget"),
+            ("Orchestration", "LangChain / LangGraph for workflow and agent logic"),
+            ("Backend", "FastAPI / Node.js for APIs, business logic, and integrations"),
+            ("Database", "PostgreSQL / Supabase, with vector database if retrieval is required"),
+            ("Integrations", "REST APIs, webhooks, CRM, WhatsApp, email, or third-party tools as required"),
+            ("Hosting", "VPS / cloud deployment with secure environment configuration"),
+        ]
+
+    if "social" in req or "media" in req:
+        return [
+            ("Planning", "Notion / Google Workspace for calendar, approvals, and content planning"),
+            ("Design", "Figma / Canva / Adobe tools based on campaign requirements"),
+            ("Publishing", "Meta Business Suite / LinkedIn tools / scheduling platforms as required"),
+            ("Analytics", "Platform analytics, Google Analytics, and campaign reporting dashboards"),
+            ("Automation", "Zapier / Make / native platform automation where useful"),
+        ]
+
+    return [
+        ("Core Stack", "Modern, scalable tools selected according to final project requirements"),
+        ("Backend", "FastAPI / Node.js where APIs or integrations are required"),
+        ("Database", "PostgreSQL / Supabase if structured data storage is required"),
+        ("Hosting", "VPS / cloud hosting according to deployment needs"),
+    ]
+
+
+def _build_technology_stack_html(client_requirements: str, technology_text: str | None = None) -> str:
+    rows = (
+        _technology_rows_from_override(technology_text)
+        if technology_text
+        else _default_technology_rows(client_requirements)
+    )
+    table_rows = "".join(
+        f"<tr><td>{escape(layer)}</td><td>{escape(technology)}</td></tr>"
+        for layer, technology in rows
+    )
+
+    return f"""
+<p>We will be using modern and scalable technologies ensuring fast loading speed, performance, and scalability for future upgrades.</p>
+<table class="proposal-table">
+    <thead>
+        <tr>
+            <th class="col-phase">Layer</th>
+            <th>Technology</th>
+        </tr>
+    </thead>
+    <tbody>
+        {table_rows}
+    </tbody>
+</table>
+""".strip()
+
+
 def _generate_dynamic_section(
     client,
     section_number: int,
@@ -176,7 +305,7 @@ def _generate_dynamic_section(
     client_requirements: str,
     timeline_days: int,
     budget_inr: str,
-    research_text: str,
+    budget_guidance: str,
     max_words: int = None,
 ) -> str:
     word_limit_text = f"IMPORTANT: Keep content to maximum {max_words} words total." if max_words else ""
@@ -193,7 +322,12 @@ Rules:
 - Do not include heading text.
 - Do not include HTML.
 - Keep 1-2 paragraphs and 3-6 bullet points max.
-- Pricing section must mention INR values.
+- Write section 2 and section 3 according to the provided budget range.
+- Match ambition, deliverables, and complexity to the budget guidance.
+- Do not overpromise features that do not fit the budget.
+- Use a professional, conversational tone.
+- Do not use emojis.
+- Do not use markdown bold or italic markers.
 {word_limit_text}
 
 Context:
@@ -202,9 +336,8 @@ Context:
 - Client business: {client_business}
 - Client requirements: {client_requirements}
 - Timeline: {timeline_days} days
-- Budget anchor: {budget_inr}
-- Market research:
-{research_text}
+- User provided budget range: {budget_inr}
+- Budget guidance: {budget_guidance}
 """.strip()
 
     completion = client.chat.completions.create(
@@ -227,43 +360,24 @@ Context:
     return _render_structured_html(data)
 
 
-def _compute_budget(requirements: str, research_points: list[str]) -> str:
-    req = requirements.lower()
-    base = 80000
-    if "website" in req or "web" in req:
-        base += 70000
-    if "ai" in req or "agent" in req:
-        base += 120000
-    if "social" in req:
-        base += 45000
-
-    multiplier = 1.0
-    text = " ".join(research_points).lower()
-    if "enterprise" in text or "premium" in text:
-        multiplier = 1.2
-
-    final_value = int(base * multiplier)
-    return f"INR {final_value:,}"
-
-
 def intake_node(state: ProposalState) -> ProposalState:
-    return state
-
-
-def research_node(state: ProposalState) -> ProposalState:
-    business = state["input"]["client_business_name"]
-    requirements = state["input"]["client_requirements"]
-    query = f"India pricing benchmark for {business} {requirements} web development ai automation social media management"
-    points = serper_search(query=query, num=5)
-    state["market_research"] = points
-    state["computed_budget_inr"] = _compute_budget(requirements, points)
+    data = state["input"]
+    state["computed_budget_inr"] = _format_budget_range(
+        data.get("price_min", "0"),
+        data.get("price_max", "0"),
+    )
+    state["budget_guidance"] = _budget_guidance(
+        data.get("price_min", "0"),
+        data.get("price_max", "0"),
+    )
     return state
 
 
 def draft_node(state: ProposalState) -> ProposalState:
     client = get_groq_client()
     data = state["input"]
-    research_text = "\n".join(f"- {x}" for x in state.get("market_research", []))
+    budget_inr = state["computed_budget_inr"]
+    budget_guidance = state["budget_guidance"]
 
     dynamic_2 = _generate_dynamic_section(
         client=client,
@@ -274,8 +388,8 @@ def draft_node(state: ProposalState) -> ProposalState:
         client_business=data["client_business_name"],
         client_requirements=data["client_requirements"],
         timeline_days=data["timeline_days"],
-        budget_inr=state["computed_budget_inr"],
-        research_text=research_text,
+        budget_inr=budget_inr,
+        budget_guidance=budget_guidance,
         max_words=data.get("project_objective_max_words"),
     )
     dynamic_3 = _generate_dynamic_section(
@@ -287,22 +401,13 @@ def draft_node(state: ProposalState) -> ProposalState:
         client_business=data["client_business_name"],
         client_requirements=data["client_requirements"],
         timeline_days=data["timeline_days"],
-        budget_inr=state["computed_budget_inr"],
-        research_text=research_text,
+        budget_inr=budget_inr,
+        budget_guidance=budget_guidance,
         max_words=data.get("scope_of_work_max_words"),
     )
-    dynamic_4 = _generate_dynamic_section(
-        client=client,
-        section_number=4,
-        section_title="Technology Stack",
-        agency_name=AGENCY_NAME,
-        agency_services=AGENCY_SERVICES,
-        client_business=data["client_business_name"],
+    dynamic_4 = _build_technology_stack_html(
         client_requirements=data["client_requirements"],
-        timeline_days=data["timeline_days"],
-        budget_inr=state["computed_budget_inr"],
-        research_text=research_text,
-        max_words=data.get("technology_stack_max_words"),
+        technology_text=data.get("technology_stack_text"),
     )
     dynamic_5 = _build_timeline_html(data["timeline_days"])
     dynamic_6 = _build_pricing_html(
@@ -319,8 +424,8 @@ def draft_node(state: ProposalState) -> ProposalState:
         client_business=data["client_business_name"],
         client_requirements=data["client_requirements"],
         timeline_days=data["timeline_days"],
-        budget_inr=state["computed_budget_inr"],
-        research_text=research_text,
+        budget_inr=budget_inr,
+        budget_guidance=budget_guidance,
         max_words=data.get("additional_notes_max_words"),
     )
 
@@ -399,15 +504,13 @@ def should_continue(state: ProposalState) -> str:
 def build_graph():
     graph = StateGraph(ProposalState)
     graph.add_node("intake", intake_node)
-    graph.add_node("research", research_node)
     graph.add_node("draft", draft_node)
     graph.add_node("validate", validate_node)
     graph.add_node("pdf", pdf_node)
     graph.add_node("drive", drive_node)
 
     graph.add_edge(START, "intake")
-    graph.add_edge("intake", "research")
-    graph.add_edge("research", "draft")
+    graph.add_edge("intake", "draft")
     graph.add_edge("draft", "validate")
     graph.add_conditional_edges(
         "validate",

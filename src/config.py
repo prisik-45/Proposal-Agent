@@ -10,7 +10,6 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
 
 AGENCY_NAME = os.getenv("AGENCY_NAME", "Tarkshy")
 AGENCY_LOGO_PATH = os.getenv("AGENCY_LOGO_PATH", "")
