@@ -11,6 +11,7 @@ import re
 import time
 import traceback
 
+from src.config import ALLOWED_ORIGINS
 from src.graph import build_graph
 from src.memory_store import MemoryStore
 from src.nlp_parser import (
@@ -84,11 +85,16 @@ app = FastAPI(
 # ========== CORS Middleware ==========
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins (can be restricted to ["http://localhost:3000"] for production)
+    allow_origins=ALLOWED_ORIGINS,  # Secured for production via env vars
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/")
+def read_root():
+    """Health check endpoint for Render"""
+    return {"status": "ok", "message": "Proposal Agent API is running"}
 
 memory_store = MemoryStore()
 
