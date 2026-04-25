@@ -51,7 +51,7 @@ def render_pdf(
     client_requirements: str,
     body_html: str,
     output_file: Path,
-) -> str:
+) -> tuple[str, bytes]:
     # Need to handle Jinja correctly across environments where pwd might change
     base_dir = Path(__file__).resolve().parent
     template_env = Environment(loader=FileSystemLoader(str(base_dir / "templates")))
@@ -72,8 +72,10 @@ def render_pdf(
         body_html=body_html,
     )
 
+    pdf_bytes = b""
     if WEASYPRINT_AVAILABLE:
-        HTML(string=html_content, base_url=str(Path.cwd())).write_pdf(str(output_file))
+        pdf_bytes = HTML(string=html_content, base_url=str(Path.cwd())).write_pdf()
+        output_file.write_bytes(pdf_bytes)
     else:
         # Fallback for Vercel/serverless environments lacking GTK where WeasyPrint crashes
         with open(str(output_file).replace('.pdf', '.html'), 'w', encoding='utf-8') as f:
@@ -81,4 +83,4 @@ def render_pdf(
         # Mock return since actual PDF isn't generated
         print("Mocked PDF via HTML fallback on serverless.")
 
-    return str(output_file)
+    return str(output_file), pdf_bytes

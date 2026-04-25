@@ -479,16 +479,19 @@ def pdf_node(state: ProposalState) -> ProposalState:
     data = state["input"]
     file_name = f"Tarkshy_Proposal_{data['client_business_name'].replace(' ', '')}.pdf"
     output_path = OUTPUT_DIR / file_name
-    path = render_pdf(
+    path, pdf_bytes = render_pdf(
         client_business_name=data["client_business_name"],
         client_requirements=data["client_requirements"],
         body_html=state.get("section_text", ""),
         output_file=Path(output_path),
     )
     state["output_pdf_path"] = path
+    state["pdf_bytes"] = pdf_bytes
     try:
-        pdf_bytes = Path(path).read_bytes()
-        state["pdf_data_url"] = "data:application/pdf;base64," + base64.b64encode(pdf_bytes).decode("utf-8")
+        if pdf_bytes:
+            state["pdf_data_url"] = "data:application/pdf;base64," + base64.b64encode(pdf_bytes).decode("utf-8")
+        else:
+            state["pdf_data_url"] = ""
     except Exception:
         state["pdf_data_url"] = ""
     return state

@@ -7,7 +7,7 @@ import base64
 import json
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional, Any, Dict, List
@@ -282,14 +282,16 @@ async def download_pdf(payload: str):
 
         graph = build_graph()
         result = graph.invoke({"input": params})
-        pdf_path = result.get("output_pdf_path")
-        if not pdf_path or not Path(pdf_path).exists():
-            raise FileNotFoundError("Generated PDF file not found")
+        pdf_bytes = result.get("pdf_bytes")
+        if not pdf_bytes:
+            raise FileNotFoundError("Generated PDF bytes not found")
 
-        return FileResponse(
-            pdf_path,
+        return Response(
+            content=pdf_bytes,
             media_type="application/pdf",
-            filename=f"proposal-{params.get('client_business_name', 'client')}.pdf",
+            headers={
+                "Content-Disposition": f"inline; filename=proposal-{params.get('client_business_name', 'client')}.pdf"
+            },
         )
     except HTTPException:
         raise

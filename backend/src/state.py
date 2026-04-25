@@ -23,6 +23,7 @@ class ProposalState(TypedDict, total=False):
     section_text: str
     html_content: str
     output_pdf_path: str
+    pdf_bytes: bytes
     pdf_data_url: str
     drive_file_id: str
     drive_public_link: str
