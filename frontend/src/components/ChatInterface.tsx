@@ -58,7 +58,9 @@ const ChatInterface: React.FC = () => {
     setLoading(true)
 
     try {
-      const response = await axios.post('/api/proposals/converse', {
+      // The baseURL is configured in main.tsx. 
+      // We directly target the endpoint now, without the Vite proxy '/api' prefix
+      const response = await axios.post('/proposals/converse', {
         user_input: input,
         session_id: sessionId,
       })
