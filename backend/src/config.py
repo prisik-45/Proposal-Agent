@@ -5,8 +5,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-OUTPUT_DIR = BASE_DIR / "output"
-OUTPUT_DIR.mkdir(exist_ok=True)
+
+# Vercel serverless limits file writing. Fall back to /tmp/ directory for generation.
+if "VERCEL" in os.environ or os.environ.get("VERCEL_ENV") or os.environ.get("PORT"):
+    OUTPUT_DIR = Path("/tmp/output")
+else:
+    OUTPUT_DIR = BASE_DIR / "output"
+
+OUTPUT_DIR.mkdir(exist_ok=True, parents=True)
 
 GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")

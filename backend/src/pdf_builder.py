@@ -46,7 +46,9 @@ def render_pdf(
     body_html: str,
     output_file: Path,
 ) -> str:
-    template_env = Environment(loader=FileSystemLoader("src/templates"))
+    # Need to handle Jinja correctly across environments where pwd might change
+    base_dir = Path(__file__).resolve().parent
+    template_env = Environment(loader=FileSystemLoader(str(base_dir / "templates")))
     template = template_env.get_template("proposal.html.j2")
 
     service_title = _proposal_service_from_requirements(client_requirements)
