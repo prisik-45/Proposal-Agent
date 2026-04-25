@@ -1,5 +1,6 @@
 [project]
 name = "proposal-agent"
+app = "src.api:app"
 version = "0.1.0"
 description = "Tarkshy AI Proposal Generator Agent"
 readme = "README.md"
