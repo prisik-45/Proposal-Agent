@@ -56,7 +56,7 @@ def _get_credentials() -> Credentials:
         else:
             import os
             # Vercel bypass: Do not try to pop up a browser auth flow in serverless.
-            if "VERCEL" in os.environ or os.environ.get("VERCEL_ENV") or os.environ.get("PORT"):
+            if "VERCEL" in os.environ or os.environ.get("VERCEL_ENV"):
                 raise RuntimeError("Google Drive Token expired. Cannot re-auth via browser on serverless.")
             
             flow = _flow_from_env_or_file()

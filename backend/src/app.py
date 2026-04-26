@@ -267,6 +267,7 @@ def _generate_proposal_artifacts(extracted: Dict[str, Any]) -> Dict[str, str]:
         "drive_link": result.get("drive_public_link", ""),
         "pdf_data_url": result.get("pdf_data_url", ""),
         "pdf_download_url": f"/api/proposals/download-pdf?payload={encoded_payload}",
+        "drive_error": result.get("drive_upload_error", ""),
     }
 
 
@@ -388,6 +389,13 @@ async def converse_proposal(request: ProposalConversationRequest) -> Dict[str, A
             drive_link = artifacts["drive_link"]
             pdf_data_url = artifacts["pdf_data_url"]
             pdf_download_url = artifacts["pdf_download_url"]
+            drive_error = artifacts.get("drive_error", "")
+            if not drive_link:
+                return {
+                    "success": False,
+                    "message": "Proposal was generated, but upload to Google Drive failed.",
+                    "error": drive_error or "Drive link was not created.",
+                }
             session.current_params = {**extracted, "drive_link": drive_link, "pdf_data_url": pdf_data_url, "pdf_download_url": pdf_download_url}
             memory_store.add_turn(
                 session_id,
@@ -471,6 +479,17 @@ async def converse_proposal(request: ProposalConversationRequest) -> Dict[str, A
         drive_link = artifacts["drive_link"]
         pdf_data_url = artifacts["pdf_data_url"]
         pdf_download_url = artifacts["pdf_download_url"]
+        drive_error = artifacts.get("drive_error", "")
+        if not drive_link:
+            return {
+                "success": False,
+                "message": "Proposal was generated, but upload to Google Drive failed.",
+                "error": drive_error or "Drive link was not created.",
+                "retrieved_context": {
+                    "retrieved_turns": retrieved_turns,
+                    "current_params": session.current_params,
+                },
+            }
         resolved = {**resolved, "drive_link": drive_link, "pdf_data_url": pdf_data_url, "pdf_download_url": pdf_download_url}
 
         changed_fields = _interpret_update_changes(session.current_params, resolved)
@@ -591,6 +610,18 @@ async def generate_proposal(request: ProposalRequest):
         drive_link = result.get("drive_public_link", "")
         pdf_data_url = result.get("pdf_data_url", "")
         pdf_download_url = result.get("pdf_download_url", "")
+        drive_error = result.get("drive_upload_error", "")
+
+        if not drive_link:
+            return ProposalResponse(
+                success=False,
+                message="Proposal was generated, but upload to Google Drive failed.",
+                drive_link=None,
+                pdf_data_url=pdf_data_url or None,
+                pdf_download_url=pdf_download_url or None,
+                extracted_params=extracted,
+                error=drive_error or "Drive link was not created.",
+            )
         
         return ProposalResponse(
             success=True,
