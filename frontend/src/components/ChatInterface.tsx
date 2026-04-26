@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react'
-import axios from 'axios'
 import Message from './Message'
 import ParametersDisplay from './ParametersDisplay'
 import { ProposalConversationResponse, ExtractedParams } from '../types'
+
+const API = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 
 interface ChatMessage {
   id: string
@@ -59,14 +60,23 @@ const ChatInterface: React.FC = () => {
     setLoading(true)
 
     try {
-      // Vercel routes our backend Python app to `/api/` 
-      // (or we hit a proxy locally as configured in vite.config.ts)
-      const response = await axios.post('/api/proposals/converse', {
-        user_input: input,
-        session_id: sessionId,
+      const response = await fetch(`${API}/proposals/converse`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_input: input,
+          session_id: sessionId,
+        }),
       })
 
-      const result: ProposalConversationResponse = response.data
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null)
+        throw new Error(errorPayload?.detail || `Request failed with status ${response.status}`)
+      }
+
+      const result: ProposalConversationResponse = await response.json()
       setConversationResult(result)
       setExtractedParams(result.resolved_params || null)
 

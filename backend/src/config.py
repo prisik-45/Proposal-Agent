@@ -20,7 +20,10 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 AGENCY_NAME = os.getenv("AGENCY_NAME", "Tarkshy")
 AGENCY_LOGO_PATH = os.getenv("AGENCY_LOGO_PATH", "")
 AGENCY_DEMO_LINK = os.getenv("AGENCY_DEMO_LINK", "https://example.com/demo")
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "https://proposal-agent-gamma.vercel.app,https://proposal-agent-dun.vercel.app,https://proposal-agent-oisv.onrender.com,http://localhost:5173").split(",")
+ALLOWED_ORIGINS = os.getenv(
+    "ALLOWED_ORIGINS",
+    "https://proposal-agent-eight.vercel.app,http://localhost:5173",
+).split(",")
 AGENCY_SERVICES = [
     "AI Automation",
     "Web Development",
