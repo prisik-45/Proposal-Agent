@@ -36,7 +36,7 @@ const Message: React.FC<MessageProps> = ({ message }) => {
                 rel="noopener noreferrer"
                 className="inline-flex items-center rounded-md bg-gray-700 px-3 py-2 text-xs font-medium text-white hover:bg-gray-600 transition-colors"
               >
-                View PDF
+                Download PDF
               </a>
             )}
           </div>

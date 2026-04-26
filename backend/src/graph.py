@@ -8,7 +8,6 @@ from langgraph.graph import END, START, StateGraph
 from src.config import AGENCY_NAME, AGENCY_SERVICES, GROQ_MODEL, OUTPUT_DIR
 from src.pdf_builder import render_pdf
 from src.state import ProposalState
-from src.tools.drive import upload_pdf_public
 from src.tools.groq_client import get_groq_client
 
 
@@ -497,18 +496,7 @@ def pdf_node(state: ProposalState) -> ProposalState:
     return state
 
 
-def drive_node(state: ProposalState) -> ProposalState:
-    try:
-        file_id, link = upload_pdf_public(state["output_pdf_path"])
-        state["drive_file_id"] = file_id
-        state["drive_public_link"] = link
-    except Exception as exc:
-        # On Vercel/serverless, browser-based OAuth re-auth is unavailable.
-        # Treat upload as optional so proposal generation can still succeed.
-        state["drive_file_id"] = ""
-        state["drive_public_link"] = ""
-        state["drive_upload_error"] = str(exc)
-    return state
+# Drive node removed - PDF is now downloaded directly from backend
 
 
 def should_continue(state: ProposalState) -> str:
@@ -523,7 +511,6 @@ def build_graph():
     graph.add_node("draft", draft_node)
     graph.add_node("validate", validate_node)
     graph.add_node("pdf", pdf_node)
-    graph.add_node("drive", drive_node)
 
     graph.add_edge(START, "intake")
     graph.add_edge("intake", "draft")
@@ -536,7 +523,6 @@ def build_graph():
             "end": END,
         },
     )
-    graph.add_edge("pdf", "drive")
-    graph.add_edge("drive", END)
+    graph.add_edge("pdf", END)
 
     return graph.compile()

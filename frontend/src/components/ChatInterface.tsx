@@ -81,7 +81,7 @@ const ChatInterface: React.FC = () => {
       setExtractedParams(result.resolved_params || null)
 
       let assistantContent = ''
-      const pdfUrl = result.drive_link || null
+      const pdfUrl = result.pdf_download_url || null
       if (result.success) {
         const changedText = result.changed_fields?.length
           ? `\n\nChanged fields:\n- ${result.changed_fields.join('\n- ')}`

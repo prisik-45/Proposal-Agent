@@ -30,7 +30,13 @@ def main():
         }
     )
 
-    print(result.get("drive_public_link", ""))
+    print("Proposal generated successfully!")
+    if result.get("error"):
+        print(f"Error: {result.get('error')}")
+    else:
+        print(f"PDF bytes available: {len(result.get('pdf_bytes', b''))} bytes")
+        if result.get('output_pdf_path'):
+            print(f"Output file: {result.get('output_pdf_path')}")
 
 
 if __name__ == "__main__":
