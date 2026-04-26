@@ -268,6 +268,7 @@ def _generate_proposal_artifacts(extracted: Dict[str, Any]) -> Dict[str, str]:
         "pdf_data_url": result.get("pdf_data_url", ""),
         "pdf_download_url": f"/api/proposals/download-pdf?payload={encoded_payload}",
         "drive_error": result.get("drive_upload_error", ""),
+        "graph_error": result.get("error", ""),
     }
 
 
@@ -390,11 +391,12 @@ async def converse_proposal(request: ProposalConversationRequest) -> Dict[str, A
             pdf_data_url = artifacts["pdf_data_url"]
             pdf_download_url = artifacts["pdf_download_url"]
             drive_error = artifacts.get("drive_error", "")
+            graph_error = artifacts.get("graph_error", "")
             if not drive_link:
                 return {
                     "success": False,
                     "message": "Proposal was generated, but upload to Google Drive failed.",
-                    "error": drive_error or "Drive link was not created.",
+                    "error": drive_error or graph_error or "Drive link was not created. Check Render env credentials/token and Drive folder permissions.",
                 }
             session.current_params = {**extracted, "drive_link": drive_link, "pdf_data_url": pdf_data_url, "pdf_download_url": pdf_download_url}
             memory_store.add_turn(
@@ -480,11 +482,12 @@ async def converse_proposal(request: ProposalConversationRequest) -> Dict[str, A
         pdf_data_url = artifacts["pdf_data_url"]
         pdf_download_url = artifacts["pdf_download_url"]
         drive_error = artifacts.get("drive_error", "")
+        graph_error = artifacts.get("graph_error", "")
         if not drive_link:
             return {
                 "success": False,
                 "message": "Proposal was generated, but upload to Google Drive failed.",
-                "error": drive_error or "Drive link was not created.",
+                "error": drive_error or graph_error or "Drive link was not created. Check Render env credentials/token and Drive folder permissions.",
                 "retrieved_context": {
                     "retrieved_turns": retrieved_turns,
                     "current_params": session.current_params,
