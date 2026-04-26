@@ -260,7 +260,7 @@ def _generate_proposal_artifacts(extracted: Dict[str, Any]) -> Dict[str, str]:
     payload = json.dumps(extracted, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     encoded_payload = base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
     return {
-        "pdf_download_url": f"/api/proposals/download-pdf?payload={encoded_payload}",
+        "pdf_download_url": f"/proposals/download-pdf?payload={encoded_payload}",
         "graph_error": result.get("error", ""),
     }
 
@@ -607,7 +607,7 @@ async def generate_proposal(request: ProposalRequest):
         # Generate the download URL with payload
         payload = json.dumps(extracted, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
         encoded_payload = base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
-        pdf_download_url = f"/api/proposals/download-pdf?payload={encoded_payload}"
+        pdf_download_url = f"/proposals/download-pdf?payload={encoded_payload}"
         
         return ProposalResponse(
             success=True,

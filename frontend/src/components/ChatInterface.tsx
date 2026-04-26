@@ -5,6 +5,13 @@ import { ProposalConversationResponse, ExtractedParams } from '../types'
 
 const API = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 
+const resolvePdfUrl = (url?: string | null) => {
+  if (!url) return null
+  if (/^https?:\/\//i.test(url)) return url
+  if (!API) return url
+  return `${API}${url.startsWith('/') ? url : `/${url}`}`
+}
+
 interface ChatMessage {
   id: string
   type: 'user' | 'assistant'
@@ -81,7 +88,7 @@ const ChatInterface: React.FC = () => {
       setExtractedParams(result.resolved_params || null)
 
       let assistantContent = ''
-      const pdfUrl = result.pdf_download_url || null
+      const pdfUrl = resolvePdfUrl(result.pdf_download_url)
       if (result.success) {
         const changedText = result.changed_fields?.length
           ? `\n\nChanged fields:\n- ${result.changed_fields.join('\n- ')}`

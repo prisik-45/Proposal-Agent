@@ -1,6 +1,15 @@
 import React from 'react'
 import { ProposalConversationResponse, ExtractedParams } from '../types'
 
+const API = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+
+const resolvePdfUrl = (url?: string | null) => {
+  if (!url) return null
+  if (/^https?:\/\//i.test(url)) return url
+  if (!API) return url
+  return `${API}${url.startsWith('/') ? url : `/${url}`}`
+}
+
 interface ParametersDisplayProps {
   params: ExtractedParams | null
   result: ProposalConversationResponse | null
@@ -9,7 +18,7 @@ interface ParametersDisplayProps {
 const ParametersDisplay: React.FC<ParametersDisplayProps> = ({ params, result }) => {
   if (!params && !result) return null
 
-  const pdfUrl = result?.pdf_download_url || null
+  const pdfUrl = resolvePdfUrl(result?.pdf_download_url)
 
   return (
     <div className="p-4 space-y-4">
@@ -117,7 +126,7 @@ const ParametersDisplay: React.FC<ParametersDisplayProps> = ({ params, result })
               rel="noopener noreferrer"
               className="inline-block mt-3 bg-gray-700 hover:bg-gray-600 text-white text-xs py-2 px-3 rounded transition-colors"
             >
-              View PDF
+              Download PDF
             </a>
           )}
 
